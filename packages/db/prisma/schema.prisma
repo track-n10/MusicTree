@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EntityType {
+  TRACK
+  ALBUM
+  ARTIST
+}
+
+enum ArtistRole {
+  MAIN
+  FEATURED
+  PRODUCER
+  REMIXER
+}
+
+enum ReleaseType {
+  SINGLE
+  EP
+  ALBUM
+  COMPILATION
+  UNKNOWN
+}
+
+enum SearchMode {
+  TRACK
+  ALBUM
+  ISRC
+  UPC
+  URL
+  ARTIST
+}
+
+enum SearchStatus {
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+model Track {
+  id             String        @id @default(cuid())
+  title          String
+  normalizedTitle String
+  isrc           String?
+  durationMs     Int?
+  releaseDate    DateTime?
+  coverImageUrl  String?
+  explicit       Boolean?
+  mainArtistId   String?
+  albumId        String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  album          Album?        @relation(fields: [albumId], references: [id])
+  mainArtist     Artist?       @relation("TrackMainArtist", fields: [mainArtistId], references: [id])
+  artists        TrackArtist[]
+  albumTracks    AlbumTrack[]
+
+  @@index([isrc])
+  @@index([normalizedTitle])
+}
+
+model Album {
+  id              String       @id @default(cuid())
+  title           String
+  normalizedTitle String
+  upc             String?
+  releaseType     ReleaseType  @default(UNKNOWN)
+  releaseDate     DateTime?
+  coverImageUrl   String?
+  mainArtistId    String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  mainArtist      Artist?      @relation("AlbumMainArtist", fields: [mainArtistId], references: [id])
+  tracks          Track[]
+  albumTracks     AlbumTrack[]
+
+  @@index([upc])
+  @@index([normalizedTitle])
+}
+
+model Artist {
+  id             String        @id @default(cuid())
+  name           String
+  normalizedName String
+  avatarUrl      String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  mainTracks     Track[]       @relation("TrackMainArtist")
+  mainAlbums     Album[]       @relation("AlbumMainArtist")
+  trackCredits   TrackArtist[]
+
+  @@index([normalizedName])
+}
+
+model TrackArtist {
+  trackId  String
+  artistId String
+  role     ArtistRole @default(FEATURED)
+  position Int        @default(0)
+
+  track    Track      @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  artist   Artist     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@id([trackId, artistId, role])
+  @@index([artistId])
+}
+
+model AlbumTrack {
+  albumId     String
+  trackId     String
+  discNumber  Int    @default(1)
+  trackNumber Int
+
+  album       Album  @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  track       Track  @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@id([albumId, trackId])
+  @@index([trackId])
+}
+
+model PlatformLink {
+  id               String     @id @default(cuid())
+  entityType       EntityType
+  entityId         String
+  platformName     String
+  platformEntityId String?
+  url              String
+  country          String?
+  extraMetadata    Json?
+  lastVerifiedAt   DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@unique([entityType, entityId, platformName, url])
+  @@index([platformName])
+  @@index([entityType, entityId])
+}
+
+model SearchRun {
+  id              String       @id @default(cuid())
+  mode            SearchMode
+  query           String
+  status          SearchStatus
+  partialFailures Json?
+  durationMs      Int?
+  createdAt       DateTime     @default(now())
+
+  @@index([mode, createdAt])
+}
