@@ -24,6 +24,11 @@ import { SpotifyAdapter } from "./spotify-adapter.js";
 import { detectPlatformUrl } from "./url-detection.js";
 import { createWebPlayerLink, WebPlayerAdapter } from "./web-player-adapter.js";
 import { YouTubeAdapter } from "./youtube-adapter.js";
+import { TidalAdapter } from "./tidal-adapter.js";
+import { AmazonMusicAdapter } from "./amazon-music-adapter.js";
+import { SoundCloudAdapter } from "./soundcloud-adapter.js";
+import { MusicRepository } from "@music-link-finder/db";
+import { SearchMode, SearchStatus } from "@prisma/client";
 
 type PlatformHealth = AdapterStatus & {
   fallbackEnabled: boolean;
@@ -37,13 +42,18 @@ type CollectorResult<T extends SearchResult> = {
 export class MusicSearchService {
   private readonly apiAdapters: MusicPlatformAdapter[];
   private readonly webAdapters: WebPlayerAdapter[];
+  private readonly repo: MusicRepository;
 
   constructor(private readonly config: RuntimeConfig = createRuntimeConfig()) {
+    this.repo = new MusicRepository();
     this.apiAdapters = [
       new SpotifyAdapter(config.env),
       new AppleMusicAdapter(config.env),
       new YouTubeAdapter(config.env, "youtube"),
-      new YouTubeAdapter(config.env, "youtubeMusic")
+      new YouTubeAdapter(config.env, "youtubeMusic"),
+      new TidalAdapter(config.env),
+      new AmazonMusicAdapter(config.env),
+      new SoundCloudAdapter(config.env)
     ];
     this.webAdapters = platformNames.map((platform) => new WebPlayerAdapter(platform));
   }
@@ -74,7 +84,7 @@ export class MusicSearchService {
     }
 
     const ranked = sortByConfidence(results.map((track) => ({ ...track, confidence: scoreTrackCandidate(track, input.query, input.artist) }))).slice(0, 20);
-    return this.envelope({ query: input, results: ranked, failures: collected.failures, startedAt });
+    return this.envelope({ mode: SearchMode.TRACK, queryString: input.query, query: input, results: ranked, failures: collected.failures, startedAt });
   }
 
   async searchAlbum(input: { query: string; artist?: string; market?: string }): Promise<SearchResponse<Album>> {
@@ -88,7 +98,7 @@ export class MusicSearchService {
     }
 
     const ranked = sortByConfidence(results.map((album) => ({ ...album, confidence: scoreAlbumCandidate(album, input.query, input.artist) }))).slice(0, 20);
-    return this.envelope({ query: input, results: ranked, failures: collected.failures, startedAt });
+    return this.envelope({ mode: SearchMode.ALBUM, queryString: input.query, query: input, results: ranked, failures: collected.failures, startedAt });
   }
 
   async searchArtist(input: { query: string; market?: string }): Promise<SearchResponse<Artist>> {
@@ -102,7 +112,7 @@ export class MusicSearchService {
     }
 
     const ranked = sortByConfidence(results.map((artist) => ({ ...artist, confidence: scoreArtistCandidate(artist, input.query) }))).slice(0, 20);
-    return this.envelope({ query: input, results: ranked, failures: collected.failures, startedAt });
+    return this.envelope({ mode: SearchMode.ARTIST, queryString: input.query, query: input, results: ranked, failures: collected.failures, startedAt });
   }
 
   async searchByIsrc(input: { isrc: string; market?: string }): Promise<SearchResponse<Track>> {
@@ -121,7 +131,7 @@ export class MusicSearchService {
       });
     }
 
-    return this.envelope({ query: { ...input, isrc }, results: sortByConfidence(results).slice(0, 20), failures, startedAt });
+    return this.envelope({ mode: SearchMode.ISRC, queryString: isrc, query: { ...input, isrc }, results: sortByConfidence(results).slice(0, 20), failures, startedAt });
   }
 
   async searchByUpc(input: { upc: string; market?: string }): Promise<SearchResponse<Album>> {
@@ -140,7 +150,7 @@ export class MusicSearchService {
       });
     }
 
-    return this.envelope({ query: { ...input, upc }, results: sortByConfidence(results).slice(0, 20), failures, startedAt });
+    return this.envelope({ mode: SearchMode.UPC, queryString: upc, query: { ...input, upc }, results: sortByConfidence(results).slice(0, 20), failures, startedAt });
   }
 
   async searchByUrl(input: { url: string; market?: string }): Promise<SearchResponse> {
@@ -148,6 +158,7 @@ export class MusicSearchService {
     const detected = detectPlatformUrl(input.url);
     if (!detected) {
       return this.envelope({
+        mode: SearchMode.URL, queryString: input.url,
         query: input,
         results: [],
         failures: [{ platform: "system", code: "UNSUPPORTED_URL", message: "The URL is not from a supported platform." }],
@@ -158,6 +169,7 @@ export class MusicSearchService {
     const adapter = this.apiAdapters.find((candidate) => candidate.name === detected.platformName && candidate.enabled && candidate.resolveUrl);
     if (!adapter?.resolveUrl) {
       return this.envelope({
+        mode: SearchMode.URL, queryString: input.url,
         query: { ...input, detected },
         results: [],
         failures: [
@@ -185,7 +197,7 @@ export class MusicSearchService {
         code: "URL_RESOLVE_EMPTY",
         message: "The source platform did not return metadata for this URL."
       });
-      return this.envelope({ query: { ...input, detected }, results: [], failures, startedAt });
+      return this.envelope({ mode: SearchMode.URL, queryString: input.url, query: { ...input, detected }, results: [], failures, startedAt });
     }
 
     if (resolved.entityType === "track") {
@@ -194,7 +206,7 @@ export class MusicSearchService {
         ? await this.searchByIsrc({ isrc: track.isrc, market: input.market })
         : await this.searchTrack({ query: track.title, artist: track.mainArtist, market: input.market });
       const results = mergeTracks([track, ...(crossSearch.results as Track[])]).map((item) => this.withWebLinks(item));
-      return this.envelope({ query: { ...input, detected }, results, failures: [...failures, ...crossSearch.failures], startedAt });
+      return this.envelope({ mode: SearchMode.URL, queryString: input.url, query: { ...input, detected }, results, failures: [...failures, ...crossSearch.failures], startedAt });
     }
 
     if (resolved.entityType === "album") {
@@ -203,13 +215,13 @@ export class MusicSearchService {
         ? await this.searchByUpc({ upc: album.upc, market: input.market })
         : await this.searchAlbum({ query: album.title, artist: album.mainArtist, market: input.market });
       const results = mergeAlbums([album, ...(crossSearch.results as Album[])]).map((item) => this.withWebLinks(item));
-      return this.envelope({ query: { ...input, detected }, results, failures: [...failures, ...crossSearch.failures], startedAt });
+      return this.envelope({ mode: SearchMode.URL, queryString: input.url, query: { ...input, detected }, results, failures: [...failures, ...crossSearch.failures], startedAt });
     }
 
     const artist = resolved.entity as Artist;
     const crossSearch = await this.searchArtist({ query: artist.name, market: input.market });
     const results = mergeArtists([artist, ...(crossSearch.results as Artist[])]).map((item) => this.withWebLinks(item));
-    return this.envelope({ query: { ...input, detected }, results, failures: [...failures, ...crossSearch.failures], startedAt });
+    return this.envelope({ mode: SearchMode.URL, queryString: input.url, query: { ...input, detected }, results, failures: [...failures, ...crossSearch.failures], startedAt });
   }
 
   private async collect<T extends SearchResult>(
@@ -291,17 +303,27 @@ export class MusicSearchService {
   }
 
   private envelope<T extends SearchResult>(input: {
+    mode: SearchMode;
+    queryString: string;
     query: Record<string, unknown>;
     results: T[];
     failures: PlatformFailure[];
     startedAt: number;
   }): SearchResponse<T> {
+    const durationMs = Date.now() - input.startedAt;
+    const failures = dedupeFailures(input.failures);
+    const status = input.results.length > 0 && failures.length === 0 ? SearchStatus.SUCCESS : input.results.length > 0 ? SearchStatus.PARTIAL : SearchStatus.FAILED;
+
+    // Fire and forget
+    this.repo.logSearch(input.mode, input.queryString, status, durationMs, failures).catch(console.error);
+    this.repo.saveResults(input.results).catch(console.error);
+
     return {
       query: input.query,
       results: input.results,
-      failures: dedupeFailures(input.failures),
+      failures,
       meta: {
-        durationMs: Date.now() - input.startedAt,
+        durationMs,
         cached: false,
         fallbackUsed: input.results.some((result) => result.links.some((link) => link.source === "web-player"))
       }

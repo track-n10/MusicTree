@@ -17,6 +17,7 @@
     "@fastify/rate-limit": "^10.2.1",
     "@music-link-finder/adapters": "file:../../packages/adapters",
     "@music-link-finder/core": "file:../../packages/core",
+    "@music-link-finder/db": "file:../../packages/db",
     "dotenv": "^16.5.0",
     "fastify": "^5.3.2",
     "pino": "^9.6.0",
