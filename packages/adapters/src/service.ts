@@ -27,6 +27,7 @@ import { YouTubeAdapter } from "./youtube-adapter.js";
 import { TidalAdapter } from "./tidal-adapter.js";
 import { AmazonMusicAdapter } from "./amazon-music-adapter.js";
 import { SoundCloudAdapter } from "./soundcloud-adapter.js";
+import { DeezerAdapter } from "./deezer-adapter.js";
 import { MusicRepository } from "@music-link-finder/db";
 import { SearchMode, SearchStatus } from "@prisma/client";
 
@@ -47,6 +48,7 @@ export class MusicSearchService {
   constructor(private readonly config: RuntimeConfig = createRuntimeConfig()) {
     this.repo = new MusicRepository();
     this.apiAdapters = [
+      new DeezerAdapter(),
       new SpotifyAdapter(config.env),
       new AppleMusicAdapter(config.env),
       new YouTubeAdapter(config.env, "youtube"),

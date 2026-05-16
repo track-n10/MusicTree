@@ -1,6 +1,7 @@
 export const platformNames = [
   "spotify",
   "appleMusic",
+  "deezer",
   "amazonMusic",
   "tidal",
   "audiomack",
@@ -63,6 +64,18 @@ export const platformConfigs: PlatformConfig[] = [
       track: "https://music.apple.com/search?term={query}",
       album: "https://music.apple.com/search?term={query}",
       artist: "https://music.apple.com/search?term={query}"
+    }
+  },
+  {
+    name: "deezer",
+    displayName: "Deezer",
+    homepageUrl: "https://www.deezer.com",
+    credentialKeys: [],
+    capabilities: ["searchByIsrc"],
+    webPlayerSearch: {
+      track: "https://www.deezer.com/search?q={query}",
+      album: "https://www.deezer.com/search?q={query}",
+      artist: "https://www.deezer.com/search?q={query}"
     }
   },
   {

@@ -83,8 +83,13 @@ export class SpotifyAdapter implements MusicPlatformAdapter {
   }
 
   async searchByIsrc(isrc: string, market = "US"): Promise<Track[]> {
-    const data = await this.search("track", `isrc:${isrc}`, market);
-    return (data.tracks?.items ?? []).map((track) => this.mapTrack(track));
+    let data = await this.search("track", `isrc:${isrc}`, market);
+    let items = data.tracks?.items ?? [];
+    if (items.length === 0) {
+      data = await this.search("track", `isrc:${isrc}`);
+      items = data.tracks?.items ?? [];
+    }
+    return items.map((track) => this.mapTrack(track));
   }
 
   async searchByUpc(upc: string, market = "US"): Promise<Album[]> {
@@ -147,9 +152,14 @@ export class SpotifyAdapter implements MusicPlatformAdapter {
     return token.access_token;
   }
 
-  private async search(type: "track" | "album" | "artist", q: string, market: string): Promise<SpotifySearchResponse> {
+  private async search(type: "track" | "album" | "artist", q: string, market?: string): Promise<SpotifySearchResponse> {
     const token = await this.getToken();
-    const params = toQueryString({ q, type, limit: 10, market });
+    const params = toQueryString({
+      q,
+      type,
+      limit: 10,
+      ...(market ? { market } : {})
+    });
     return fetchJson<SpotifySearchResponse>(`https://api.spotify.com/v1/search?${params}`, {
       headers: { Authorization: `Bearer ${token}` }
     });

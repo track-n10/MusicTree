@@ -109,9 +109,26 @@ export class AppleMusicAdapter implements MusicPlatformAdapter {
       return ((data.data ?? []) as Array<AppleResource<AppleSongAttributes>>).map((song) => this.mapAppleSong(song));
     }
 
+    const mapSongs = (data: ITunesResponse) =>
+      data.results.filter((item) => item.kind === "song").map((item) => this.mapITunesTrack(item, isrc));
+
+    let data = await this.itunes("lookup", { isrc });
+    let tracks = mapSongs(data);
+    if (tracks.length > 0) return tracks;
+
     const country = market.trim().toLowerCase();
-    const data = await this.itunes("lookup", { isrc, country });
-    return data.results.filter((item) => item.kind === "song").map((item) => this.mapITunesTrack(item, isrc));
+    data = await this.itunes("lookup", { isrc, country });
+    tracks = mapSongs(data);
+    if (tracks.length > 0) return tracks;
+
+    const fallbackCountries = ["us", "gb", "br", "de", "fr", "jp"].filter((c) => c !== country);
+    for (const c of fallbackCountries) {
+      data = await this.itunes("lookup", { isrc, country: c });
+      tracks = mapSongs(data);
+      if (tracks.length > 0) return tracks;
+    }
+
+    return [];
   }
 
   async searchByUpc(upc: string, market = "US"): Promise<Album[]> {
