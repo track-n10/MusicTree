@@ -1,5 +1,5 @@
 import { prisma } from "./index.js";
-import { type Track, type Album, type Artist, type PlatformLink, type PlatformFailure, normalizeText, normalizeCode } from "@music-link-finder/core";
+import { type Track, type Album, type Artist, type PlatformLink, type PlatformFailure, type SearchResult, normalizeText, normalizeCode } from "@music-link-finder/core";
 import { EntityType, SearchMode, SearchStatus } from "@prisma/client";
 
 export class MusicRepository {

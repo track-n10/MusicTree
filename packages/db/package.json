@@ -13,10 +13,10 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "db:generate": "prisma generate --schema prisma/schema.prisma",
-    "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
-    "db:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
-    "studio": "prisma studio --schema prisma/schema.prisma",
+    "db:generate": "dotenv -e ../../.env -- prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "dotenv -e ../../.env -- prisma migrate dev --schema prisma/schema.prisma",
+    "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy --schema prisma/schema.prisma",
+    "studio": "dotenv -e ../../.env -- prisma studio --schema prisma/schema.prisma",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
