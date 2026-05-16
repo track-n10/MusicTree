@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run db:generate && npm run build -w @music-link-finder/db && npm run build -w @music-link-finder/core && npm run build -w @music-link-finder/adapters && concurrently \"npm run dev -w @music-link-finder/api\" \"npm run dev -w @music-link-finder/web\"",
+    "dev": "npm run build -w @music-link-finder/db && npm run build -w @music-link-finder/core && npm run build -w @music-link-finder/adapters && concurrently \"npm run dev -w @music-link-finder/api\" \"npm run dev -w @music-link-finder/web\"",
     "build": "npm run build -w @music-link-finder/db && npm run build -w @music-link-finder/core && npm run build -w @music-link-finder/adapters && npm run build -w @music-link-finder/api && npm run build -w @music-link-finder/web",
     "lint": "npm run lint -w @music-link-finder/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
