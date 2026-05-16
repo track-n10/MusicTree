@@ -33,6 +33,7 @@ type ITunesItem = {
   trackExplicitness?: string;
   collectionExplicitness?: string;
   primaryGenreName?: string;
+  isrc?: string;
 };
 type ITunesResponse = { resultCount: number; results: ITunesItem[] };
 
@@ -102,23 +103,25 @@ export class AppleMusicAdapter implements MusicPlatformAdapter {
     };
   }
 
-  async searchByIsrc(isrc: string): Promise<Track[]> {
+  async searchByIsrc(isrc: string, market = "US"): Promise<Track[]> {
     if (this.developerToken) {
       const data = await this.appleGet<AppleSearchResponse>(`songs?filter[isrc]=${encodeURIComponent(isrc)}`);
       return ((data.data ?? []) as Array<AppleResource<AppleSongAttributes>>).map((song) => this.mapAppleSong(song));
     }
 
-    const data = await this.itunes("lookup", { isrc });
-    return data.results.filter((item) => item.kind === "song").map((item) => this.mapITunesTrack(item));
+    const country = market.trim().toLowerCase();
+    const data = await this.itunes("lookup", { isrc, country });
+    return data.results.filter((item) => item.kind === "song").map((item) => this.mapITunesTrack(item, isrc));
   }
 
-  async searchByUpc(upc: string): Promise<Album[]> {
+  async searchByUpc(upc: string, market = "US"): Promise<Album[]> {
     if (this.developerToken) {
       const data = await this.appleGet<AppleSearchResponse>(`albums?filter[upc]=${encodeURIComponent(upc)}`);
       return ((data.data ?? []) as Array<AppleResource<AppleAlbumAttributes>>).map((album) => this.mapAppleAlbum(album));
     }
 
-    const data = await this.itunes("lookup", { upc, entity: "album" });
+    const country = market.trim().toLowerCase();
+    const data = await this.itunes("lookup", { upc, entity: "album", country });
     return data.results.filter((item) => item.wrapperType === "collection").map((item) => this.mapITunesAlbum(item));
   }
 
@@ -236,7 +239,7 @@ export class AppleMusicAdapter implements MusicPlatformAdapter {
     };
   }
 
-  private mapITunesTrack(item: ITunesItem): Track {
+  private mapITunesTrack(item: ITunesItem, fallbackIsrc?: string): Track {
     const id = String(item.trackId ?? item.collectionId ?? "");
     return {
       id,
@@ -244,6 +247,7 @@ export class AppleMusicAdapter implements MusicPlatformAdapter {
       title: item.trackName ?? item.collectionName ?? "Unknown track",
       mainArtist: item.artistName ?? "Unknown artist",
       featuredArtists: [],
+      isrc: item.isrc ?? fallbackIsrc,
       albumTitle: item.collectionName,
       durationMs: item.trackTimeMillis,
       releaseDate: item.releaseDate?.slice(0, 10),

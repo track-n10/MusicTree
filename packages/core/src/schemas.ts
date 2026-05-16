@@ -1,15 +1,18 @@
 import { z } from "zod";
+import { normalizeCode } from "./normalization.js";
 import { platformNames } from "./platforms.js";
 
-export const isrcSchema = z
-  .string()
-  .trim()
-  .regex(/^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/i, "ISRC must look like GBAHS1700024");
+/** Aceita ISRC com ou sem hífens/espaços; normaliza para alfanumérico maiúsculo antes de validar. */
+export const isrcSchema = z.preprocess(
+  (value) => (typeof value === "string" ? normalizeCode(value) : value),
+  z.string().regex(/^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$/, "ISRC inválido (ex.: USRC17607839).")
+);
 
-export const upcSchema = z
-  .string()
-  .trim()
-  .regex(/^[0-9]{8,14}$/, "UPC/EAN must be 8 to 14 digits");
+/** Aceita UPC/EAN só com dígitos após remover separadores. */
+export const upcSchema = z.preprocess(
+  (value) => (typeof value === "string" ? value.replace(/\D/g, "") : value),
+  z.string().regex(/^[0-9]{8,14}$/, "UPC/EAN deve ter entre 8 e 14 dígitos.")
+);
 
 export const searchTrackRequestSchema = z.object({
   query: z.string().trim().min(1).max(200),

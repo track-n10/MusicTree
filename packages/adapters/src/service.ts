@@ -127,7 +127,8 @@ export class MusicSearchService {
       failures.push({
         platform: "system",
         code: "NO_ISRC_MATCH",
-        message: "No configured exact ISRC API returned a match. Try track name + artist to use web-player fallback search."
+        message:
+          "Nenhuma API encontrou este ISRC. Use a busca por nome da faixa e artista para gerar links de pesquisa nas plataformas."
       });
     }
 
@@ -146,7 +147,8 @@ export class MusicSearchService {
       failures.push({
         platform: "system",
         code: "NO_UPC_MATCH",
-        message: "No configured exact UPC/EAN API returned a match. Try album name + artist to use web-player fallback search."
+        message:
+          "Nenhuma API encontrou este UPC/EAN. Use a busca por nome do álbum e artista para gerar links de pesquisa nas plataformas."
       });
     }
 
@@ -161,7 +163,7 @@ export class MusicSearchService {
         mode: SearchMode.URL, queryString: input.url,
         query: input,
         results: [],
-        failures: [{ platform: "system", code: "UNSUPPORTED_URL", message: "The URL is not from a supported platform." }],
+        failures: [{ platform: "system", code: "UNSUPPORTED_URL", message: "Esta URL não é de uma plataforma suportada." }],
         startedAt
       });
     }
@@ -176,7 +178,8 @@ export class MusicSearchService {
           {
             platform: detected.platformName,
             code: "URL_RESOLVE_UNAVAILABLE",
-            message: "This platform URL was detected, but no configured API is available to read metadata from it. Search by title + artist to use web-player fallback."
+            message:
+              "A URL foi reconhecida, mas não há API configurada para ler os metadados. Busque por título e artista para usar o fallback nas plataformas."
           }
         ],
         startedAt
@@ -195,7 +198,7 @@ export class MusicSearchService {
       failures.push({
         platform: detected.platformName,
         code: "URL_RESOLVE_EMPTY",
-        message: "The source platform did not return metadata for this URL."
+        message: "A plataforma de origem não devolveu metadados para esta URL."
       });
       return this.envelope({ mode: SearchMode.URL, queryString: input.url, query: { ...input, detected }, results: [], failures, startedAt });
     }
@@ -314,9 +317,8 @@ export class MusicSearchService {
     const failures = dedupeFailures(input.failures);
     const status = input.results.length > 0 && failures.length === 0 ? SearchStatus.SUCCESS : input.results.length > 0 ? SearchStatus.PARTIAL : SearchStatus.FAILED;
 
-    // Fire and forget
+    // Fire-and-forget analytics only (do not persist incomplete catalog rows per search).
     this.repo.logSearch(input.mode, input.queryString, status, durationMs, failures).catch(console.error);
-    this.repo.saveResults(input.results).catch(console.error);
 
     return {
       query: input.query,
@@ -432,7 +434,7 @@ function toFailure(platform: PlatformName, error: unknown): PlatformFailure {
   return {
     platform,
     code: "PLATFORM_ERROR",
-    message: error instanceof Error ? error.message : "Unknown platform error"
+    message: error instanceof Error ? error.message : "Erro desconhecido da plataforma"
   };
 }
 

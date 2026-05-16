@@ -39,7 +39,7 @@ export async function buildServer(env: ApiEnv): Promise<FastifyInstance> {
     reply.status(statusCode).send({
       error: {
         code: statusCode === 429 ? "RATE_LIMITED" : "INTERNAL_ERROR",
-        message: statusCode === 429 ? "Too many requests. Please retry shortly." : "Unexpected server error."
+        message: statusCode === 429 ? "Muitas requisições. Tente de novo em instantes." : "Erro interno inesperado no servidor."
       }
     });
   });
@@ -74,7 +74,7 @@ function validate<TSchema extends ZodTypeAny>(
       return reply.status(400).send({
         error: {
           code: "VALIDATION_ERROR",
-          message: "Invalid request body.",
+          message: "Corpo da requisição inválido.",
           details: parsed.error.flatten()
         }
       });

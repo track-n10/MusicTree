@@ -1,25 +1,27 @@
 "use client";
 
-import { platformConfigs, type PlatformFailure, type PlatformLink, type SearchResponse, type SearchResult } from "@music-link-finder/core";
+import { platformConfigs, type PlatformFailure, type PlatformLink, type ReleaseType, type SearchResponse, type SearchResult } from "@music-link-finder/core";
 import { AlertTriangle, ExternalLink, Loader2, Moon, Music2, Search, Sun } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Mode = "name" | "isrc" | "upc" | "url" | "artist";
 type ReleaseKind = "track" | "album";
 
 const modes: Array<{ value: Mode; label: string; placeholder: string }> = [
-  { value: "name", label: "Track/Album name", placeholder: "Perfect Ed Sheeran" },
-  { value: "isrc", label: "ISRC", placeholder: "GBAHS1700024" },
-  { value: "upc", label: "UPC", placeholder: "00602537618132" },
+  { value: "isrc", label: "ISRC", placeholder: "USRC17607839 ou GB-AHS-17-00024" },
+  { value: "name", label: "Nome da faixa ou álbum", placeholder: "Perfect Ed Sheeran" },
+  { value: "upc", label: "UPC / EAN", placeholder: "0602537618132" },
   { value: "url", label: "URL", placeholder: "https://open.spotify.com/track/..." },
-  { value: "artist", label: "Artist", placeholder: "Ed Sheeran" }
+  { value: "artist", label: "Artista", placeholder: "Ed Sheeran" }
 ];
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const platformLabels = new Map(platformConfigs.map((platform) => [platform.name, platform.displayName]));
 
+const THEME_KEY = "music-link-finder-theme";
+
 export function SearchApp() {
-  const [mode, setMode] = useState<Mode>("name");
+  const [mode, setMode] = useState<Mode>("isrc");
   const [releaseKind, setReleaseKind] = useState<ReleaseKind>("track");
   const [query, setQuery] = useState("");
   const [artist, setArtist] = useState("");
@@ -30,10 +32,23 @@ export function SearchApp() {
 
   const activeMode = useMemo(() => modes.find((item) => item.value === mode) ?? modes[0], [mode]);
 
+  useEffect(() => {
+    const stored = typeof window !== "undefined" ? (localStorage.getItem(THEME_KEY) as "light" | "dark" | null) : null;
+    const prefersDark = typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+    const initial = stored ?? (prefersDark ? "dark" : "light");
+    setTheme(initial);
+    document.documentElement.dataset.theme = initial;
+  }, []);
+
   function toggleTheme() {
     const next = theme === "light" ? "dark" : "light";
     setTheme(next);
     document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch {
+      /* ignore */
+    }
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -55,14 +70,24 @@ export function SearchApp() {
         body: JSON.stringify(body)
       });
 
-      const payload = await result.json();
+      const raw = await result.text();
+      let payload: unknown = {};
+      if (raw) {
+        try {
+          payload = JSON.parse(raw) as unknown;
+        } catch {
+          throw new Error(`Resposta inválida do servidor (HTTP ${result.status}). Verifique se a API está em execução em ${apiBaseUrl}.`);
+        }
+      }
+
       if (!result.ok) {
-        throw new Error(payload.error?.message ?? "Search failed");
+        const err = payload as { error?: { message?: string } };
+        throw new Error(err.error?.message ?? `Erro na busca (HTTP ${result.status}).`);
       }
 
       setResponse(payload as SearchResponse);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Search failed");
+      setError(caught instanceof Error ? caught.message : "Não foi possível concluir a busca.");
     } finally {
       setLoading(false);
     }
@@ -70,26 +95,26 @@ export function SearchApp() {
 
   return (
     <main className="shell">
-      <section className="topbar" aria-label="Application header">
+      <section className="topbar" aria-label="Cabeçalho">
         <div className="brand">
           <span className="brand-mark">
             <Music2 size={19} />
           </span>
           <span>Music Link Finder</span>
         </div>
-        <button className="icon-button" type="button" onClick={toggleTheme} aria-label="Toggle theme">
+        <button className="icon-button" type="button" onClick={toggleTheme} aria-label="Alternar tema claro ou escuro">
           {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
         </button>
       </section>
 
       <section className="search-surface">
         <div className="intro">
-          <p className="eyebrow">Cross-platform music lookup</p>
-          <h1>Find the release, then open it anywhere.</h1>
+          <p className="eyebrow">Links entre plataformas</p>
+          <h1>Cole um ISRC e abra a música em qualquer serviço.</h1>
         </div>
 
         <form className="search-form" onSubmit={onSubmit}>
-          <div className="mode-grid" role="tablist" aria-label="Search mode">
+          <div className="mode-grid" role="tablist" aria-label="Modo de busca">
             {modes.map((item) => (
               <button
                 key={item.value}
@@ -111,14 +136,14 @@ export function SearchApp() {
             {mode === "name" ? (
               <>
                 <label className="small-input">
-                  <span>Artist</span>
-                  <input value={artist} onChange={(event) => setArtist(event.target.value)} placeholder="Optional" />
+                  <span>Artista</span>
+                  <input value={artist} onChange={(event) => setArtist(event.target.value)} placeholder="Opcional" />
                 </label>
                 <label className="small-input">
-                  <span>Type</span>
+                  <span>Tipo</span>
                   <select value={releaseKind} onChange={(event) => setReleaseKind(event.target.value as ReleaseKind)}>
-                    <option value="track">Track</option>
-                    <option value="album">Album</option>
+                    <option value="track">Faixa</option>
+                    <option value="album">Álbum</option>
                   </select>
                 </label>
               </>
@@ -126,7 +151,7 @@ export function SearchApp() {
 
             <button className="search-button" type="submit" disabled={loading || !query.trim()}>
               {loading ? <Loader2 size={18} className="spin" /> : <Search size={18} />}
-              <span>Search</span>
+              <span>Buscar</span>
             </button>
           </div>
         </form>
@@ -165,7 +190,7 @@ function bodyFor(mode: Mode, query: string, artist: string): Record<string, stri
 
 function ResultCard({ result }: { result: SearchResult }) {
   const imageUrl = result.type === "artist" ? result.avatarUrl : result.coverImageUrl;
-  const subtitle = result.type === "artist" ? "Artist profile" : result.mainArtist;
+  const subtitle = result.type === "artist" ? "Perfil do artista" : result.mainArtist;
   const stats = metadataLine(result);
 
   return (
@@ -176,7 +201,7 @@ function ResultCard({ result }: { result: SearchResult }) {
       <div className="result-body">
         <div className="result-heading">
           <div>
-            <p className="result-type">{result.type}</p>
+            <p className="result-type">{typeLabel(result.type)}</p>
             <h2>{resultTitle(result)}</h2>
             <p className="subtitle">{subtitle}</p>
           </div>
@@ -213,7 +238,7 @@ function FailureStrip({ failures }: { failures: PlatformFailure[] }) {
       <div>
         {failures.slice(0, 4).map((failure) => (
           <p key={`${failure.platform}-${failure.code}-${failure.message}`}>
-            <strong>{platformLabels.get(failure.platform as never) ?? failure.platform}</strong>: {failure.message}
+            <strong>{failureLabel(failure.platform)}</strong>: {failure.message}
           </p>
         ))}
       </div>
@@ -246,7 +271,7 @@ function EmptyState() {
   return (
     <section className="empty">
       <Music2 size={24} />
-      <p>No results found.</p>
+      <p>Nenhum resultado encontrado.</p>
     </section>
   );
 }
@@ -262,11 +287,11 @@ function resultTitle(result: SearchResult): string {
 function metadataLine(result: SearchResult): string {
   if (result.type === "track") {
     return [
-      result.albumTitle ? `Album: ${result.albumTitle}` : undefined,
+      result.albumTitle ? `Álbum: ${result.albumTitle}` : undefined,
       result.isrc ? `ISRC ${result.isrc}` : undefined,
       result.releaseDate,
       result.durationMs ? formatDuration(result.durationMs) : undefined,
-      result.explicit ? "Explicit" : undefined
+      result.explicit ? "Explícito" : undefined
     ]
       .filter(Boolean)
       .join(" · ");
@@ -274,17 +299,17 @@ function metadataLine(result: SearchResult): string {
 
   if (result.type === "album") {
     return [
-      result.releaseType,
+      result.releaseType !== "unknown" ? releaseTypeLabel(result.releaseType) : undefined,
       result.upc ? `UPC ${result.upc}` : undefined,
       result.releaseDate,
-      result.tracklist?.length ? `${result.tracklist.length} tracks` : undefined,
-      result.explicit ? "Explicit" : undefined
+      result.tracklist?.length ? `${result.tracklist.length} faixas` : undefined,
+      result.explicit ? "Explícito" : undefined
     ]
       .filter(Boolean)
       .join(" · ");
   }
 
-  return [result.followers ? `${Intl.NumberFormat().format(result.followers)} followers` : undefined, result.monthlyListeners ? `${Intl.NumberFormat().format(result.monthlyListeners)} monthly listeners` : undefined]
+  return [result.followers ? `${Intl.NumberFormat("pt-BR").format(result.followers)} seguidores` : undefined, result.monthlyListeners ? `${Intl.NumberFormat("pt-BR").format(result.monthlyListeners)} ouvintes mensais` : undefined]
     .filter(Boolean)
     .join(" · ");
 }
@@ -303,4 +328,26 @@ function initials(label: string): string {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+
+function typeLabel(type: SearchResult["type"]): string {
+  if (type === "track") return "Faixa";
+  if (type === "album") return "Álbum";
+  return "Artista";
+}
+
+function releaseTypeLabel(value: ReleaseType): string {
+  const map: Record<string, string> = {
+    single: "Single",
+    ep: "EP",
+    album: "Álbum",
+    compilation: "Compilação",
+    unknown: "Lançamento"
+  };
+  return map[value] ?? value;
+}
+
+function failureLabel(platform: PlatformFailure["platform"]): string {
+  if (platform === "system") return "Sistema";
+  return platformLabels.get(platform) ?? platform;
 }
